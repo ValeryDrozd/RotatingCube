@@ -31,7 +31,7 @@ struct Vec{
     }
 
     bool operator==(Vec a){
-        return this->x==a.x && this->y == a.y && this->z == a.z;
+        return abs(this->x - a.x)<0.0001 && abs(this->y - a.y)<0.0001  && abs(this->z - a.z)<0.0001;
     }
 
     double getLen(){
@@ -40,6 +40,7 @@ struct Vec{
 
     Vec normalise(){
         double len = this->getLen();
+        if(len==0)return Vec(0,0,0);
         return Vec(x/len,y/len,z/len);
     }
 };
@@ -71,20 +72,17 @@ struct Sphere{
         this->c = c;
         this->r = r;
     }
-    bool intersect(Ray r, double &t){
-        Vec oc = r.origin() - c;
-        double a = dot(r.d,r.d);
-        float b = 2.0*dot(oc,r.d);
-        float c = dot(oc,oc) - this->r*this->r;
-        float d = b*b - 4*a*c;
-        if(d<0)return false;
-        else
-        {
-    //        double dist = INT_MAX;
-            float num1 = -b+sqrt(d),num2 = -b-sqrt(d);
-            //if(num1>0)dist = min(r.origin().getLen(r.getPoint(num1)))
-            return (num1>0 || num2>0);
-        }
+    bool intersect( Vec orig,  Vec dir, double &t0)  {
+        Vec L = this->c - orig;
+        float tca = dot(L,dir);
+        float d2 = dot(L,L) - tca*tca;
+        if (d2 > r*r) return false;
+        float thc = sqrt(r*r - d2);
+        t0       = tca - thc;
+        float t1 = tca + thc;
+        if (t0 < 0) t0 = t1;
+        if (t0 < 0) return false;
+        return true;
     }
 
 };
@@ -105,7 +103,7 @@ struct Light{
     Color c;
     double intensivity;
     Light(){}
-    Light(Vec Point,Color c,double intensivity){
+    Light(Vec point,Color c,double intensivity){
         this->point = point;
         this->c = c;
         this->intensivity = intensivity;
@@ -118,48 +116,49 @@ ostream& operator<<(ostream& out,Color c){
     return out;
 }
 
+ostream& operator<<(ostream& out,Vec c){
+    out<<c.x<<' '<<c.y<<' '<<c.z<<' ';
+    return out;
+}
 
-Vec cam = Vec(10,0,0);
-Sphere sphere = Sphere(Vec(13,0,0),10);
-const int width = 501;
-const int height = 501;
-Color white(255,255,255),black(0,0,0),red(254,10,10),gray(240,100,100);//Justeasytohack1
-Light l = Light(Vec(25,0,0),white,100);
+
+Vec cam = Vec(-80,0,0);
+Sphere sphere = Sphere(Vec(0,0,0),50);
+const int width = 201;
+const int height = 201;
+Color white(255,255,255),black(0,0,0),red(220,30,20),gray(100,100,100);//Justeasytohack1
+Light l = Light(Vec(-70,40,90),white,100);
 
 void render(){
     ofstream out("out.ppm");
     Color image[501][501];
     out << "P3\n" << width << "\n" << height << "\n"<<"255\n";
     int row = 0,col = 0;
+    double t = 20000,t1 = 20000;
     for(int i = height/2;i>-height/2;i-=1){
 
         row += 1;
         col = 0;
-
         for(int j = -width/2;j<width/2;j++){
-
             col+=1;
-            double t = 20000;
             Ray ray = Ray(cam,Vec(0,j,i));
-            if(sphere.intersect(ray,t)){
-                double t1 = 20000;
+            ray.d = ray.d.normalise();
+            if(sphere.intersect(ray.origin(),ray.direction(),t)){
                 Vec pointIntersect = ray.getPoint(t);
                 Ray lightRay = Ray(l.origin(),pointIntersect);
-                if(sphere.intersect(lightRay,t1) && lightRay.getPoint(t1) == ray.getPoint(t)){
+                lightRay.d = lightRay.d.normalise();
+                if(sphere.intersect(lightRay.origin(),lightRay.direction(),t1) && lightRay.getPoint(t1) == pointIntersect){
                     image[row][col] = white;
                 } else
                     image[row][col] = gray;
+                cout<<lightRay.getPoint(t1)<<endl;
+                //cout<<ray.getPoint(t);
+                Vec a = ray.getPoint(t);
             }
             else
                 image[row][col] = black;
-
         }
     }
-    for(int i = 0;i<height;i++){
-        image[250][i] = red;
-        image[i][250] = red;
-    }
-
     for(int i = 0;i<height;i++){
         for(int j = 0;j<width;j++){
             out<<image[i][j];
@@ -169,6 +168,5 @@ void render(){
 
 int main(){
     double t;
-   // cout<<sphere.intersect(Ray(cam,Vec(1,0,0)),t);
     render();
 }
